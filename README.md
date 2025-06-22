@@ -51,8 +51,7 @@ my_network.learn_adaptive_lr(
   test_labels,
   32,
   "current",
-  ce_loss,
-  d_ce_loss,
+  "ce",
   num_gens= 10,
   lr_slope= 1.5,
   moving_avg_num= 4
