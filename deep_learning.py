@@ -1,20 +1,26 @@
 import numpy as np
-import tensorflow as tf
 from tqdm import tqdm
+# import tensorflow as tf
 
-def one_hot_encode(labels, num_classes=10):
+def one_hot_encode(labels, num_classes):
     one_hot = np.zeros((labels.size, num_classes))
     one_hot[np.arange(labels.size), labels] = 1
     return one_hot
 
+def split_dataset(dataset, idx):
+    test_i = np.arange(0, len(dataset), idx)
+    test = dataset[test_i]
+    train_i = np.setdiff1d(np.arange(len(dataset)), test_i)
+    train = dataset[train_i]
+    return train, test
 
 def get_mnist_number_dataset():
     (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
     train_images = train_images.reshape(train_images.shape[0], -1)/255
     test_images = test_images.reshape(test_images.shape[0], -1)/255
 
-    train_labels = one_hot_encode(train_labels)
-    test_labels = one_hot_encode(test_labels)
+    train_labels = one_hot_encode(train_labels, 10)
+    test_labels = one_hot_encode(test_labels, 10)
 
     print(train_images.shape)  # (60000, 784)
     print(train_labels.shape)  # (60000, 10)
@@ -26,8 +32,8 @@ def get_mnist_fashion_dataset():
     train_images = train_images.reshape(train_images.shape[0], -1)/255
     test_images = test_images.reshape(test_images.shape[0], -1)/255
 
-    train_labels = one_hot_encode(train_labels)
-    test_labels = one_hot_encode(test_labels)
+    train_labels = one_hot_encode(train_labels, 10)
+    test_labels = one_hot_encode(test_labels, 10)
 
     print(train_images.shape)  # (60000, 784)
     print(train_labels.shape)  # (60000, 10)
@@ -92,7 +98,11 @@ def d_ce_loss(predictions, targets):
 def success_func(predictions, targets):
     predicted_classes = np.argmax(predictions, axis=1)
     target_classes = np.argmax(targets, axis=1)
-    accuracy = np.mean(predicted_classes == target_classes)
+    correct = predicted_classes == target_classes
+
+    max_values = np.max(predictions, axis= 1)
+    counts = np.array([np.count_nonzero(row == val) for row, val in zip(predictions, max_values)])
+    accuracy = np.mean(correct/counts)
     return accuracy * 100
 
 loss_funcs = {
@@ -137,8 +147,6 @@ class Layer:
 
     def backward(self, d_output, learning_rate):
         if self.using_af:
-            # print("Z:\n", self.z, "\n")
-            # print("d_output:\n", d_output, "\n")
             if self.d_activation_function is not None:
                 d_output *= self.d_activation_function(self.z)
 
@@ -224,6 +232,9 @@ class Network:
         if bar:
             self.pbar = tqdm(total=len(X)*num_gens, desc=f"Learning: (Loss - ---, gen 0/{num_gens})")
         for gen in range(num_gens):
+            indices = np.random.permutation(len(X))
+            X = X[indices]
+            y = y[indices]
             for X_batch, y_batch in self.get_batch(X, y, batch_size):
                 output = X_batch
                 for layer in self.layers:
@@ -268,7 +279,7 @@ class Network:
             self.pbar.close()
         return total_success/batches, total_loss/batches
 
-    def learn_adaptive_lr(self, X, y, X_testing, y_testing, batch_size, model, loss_func_name, num_gens=20, lr_slope= 2.5, moving_avg_num= 3):
+    def learn_adaptive_lr(self, X, y, X_testing, y_testing, batch_size, model, loss_func_name, num_gens=20, lr_slope= 2.5, moving_avg_num= 3, lr_start= 0.5):
         if model != "current":
             self.load(model)
 
@@ -278,10 +289,13 @@ class Network:
 
         best_loss = 100000
         best_gen = 0
-        lr = 0.5
+        lr = lr_start
         self.pbar = tqdm(total=len(X)*num_gens, desc=f"Learning: (Success - {round(success, 3)}%, Learning rate - {round(lr, 4)}, Loss - {round(loss, 5)}, gen 0/{num_gens})")
         moving_avg_list = [loss]*moving_avg_num
         for gen in range(num_gens):
+            indices = np.random.permutation(len(X))
+            X = X[indices]
+            y = y[indices]
             
             if loss < best_loss:
                 self.save("cache")
@@ -303,3 +317,13 @@ class Network:
             success, loss = self.test(X_testing, y_testing, 16, "current", loss_func, bar= False)
             self.pbar.desc = f"Learning: (Success - {round(success, 3)}%, Learning rate - ---, Loss - {round(loss, 5)}, gen - {best_gen}/{num_gens}, rolled back)"
         self.pbar.close()
+
+    def predict(self, X, model= "current"):
+        if model != "current":
+            self.load(model)
+        output = X
+        for layer in self.layers:
+            output = layer.forward(output)
+        output = softmax(output)
+        o_len = float(len(output[0]))
+        return np.argmax(output[0]), ((np.max(output[0])-(1/o_len))/((o_len-1)/o_len))*100
