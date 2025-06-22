@@ -1,6 +1,5 @@
 import numpy as np
 from tqdm import tqdm
-# import tensorflow as tf
 
 def one_hot_encode(labels, num_classes):
     one_hot = np.zeros((labels.size, num_classes))
@@ -14,7 +13,14 @@ def split_dataset(dataset, idx):
     train = dataset[train_i]
     return train, test
 
+tf_imported = False
+
 def get_mnist_number_dataset():
+    global tf_imported
+    global tf
+    if not tf_imported:
+        import tensorflow as tf
+        tf_imported = True
     (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
     train_images = train_images.reshape(train_images.shape[0], -1)/255
     test_images = test_images.reshape(test_images.shape[0], -1)/255
@@ -28,6 +34,11 @@ def get_mnist_number_dataset():
     return train_images, train_labels, test_images, test_labels
 
 def get_mnist_fashion_dataset():
+    global tf_imported
+    global tf
+    if not tf_imported:
+        import tensorflow as tf
+        tf_imported = True
     (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.fashion_mnist.load_data()
     train_images = train_images.reshape(train_images.shape[0], -1)/255
     test_images = test_images.reshape(test_images.shape[0], -1)/255
